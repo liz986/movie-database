@@ -121,6 +121,9 @@ tab_control.add(tab_saved, text="Saved Movies")
 tab_control.pack(expand=True, fill="both")
 
 # ------------------ SEARCH TAB ------------------
+
+search_results_cache = {}  # FIX 1 — store search results with poster URLs
+
 search_frame = ttk.Frame(tab_search)
 search_frame.pack(pady=10, padx=10, fill="x")
 
@@ -133,7 +136,13 @@ def perform_search():
     query = search_var.get().strip()
     if not query:
         return
+
     results = search_movies(query)
+
+    search_results_cache.clear()
+    for m in results:
+        search_results_cache[m["imdbID"]] = m   # FIX: store poster URL
+
     for row in tree_search.get_children():
         tree_search.delete(row)
     for m in results:
@@ -141,7 +150,6 @@ def perform_search():
 
 ttk.Button(search_frame, text="Search", command=perform_search).grid(row=0, column=2, padx=5)
 
-# Results frame with Treeview + Poster
 results_frame = tk.Frame(tab_search)
 results_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
@@ -151,7 +159,6 @@ for col in ("imdb","title","year","type"):
     tree_search.column(col, width=200)
 tree_search.pack(side="left", fill="both", expand=True)
 
-# Make treeview scrollable
 scrollbar_search = ttk.Scrollbar(results_frame, orient="vertical", command=tree_search.yview)
 tree_search.configure(yscroll=scrollbar_search.set)
 scrollbar_search.pack(side="left", fill="y")
@@ -167,16 +174,18 @@ def on_search_select(event):
     if not selected:
         poster_label_search.config(image="", text="No Image")
         return
+
     imdb_id = tree_search.item(selected[0], "values")[0]
-    conn = sqlite3.connect("movies.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT poster_url FROM movies WHERE imdb_id=?", (imdb_id,))
-    row = cursor.fetchone()
-    conn.close()
-    url = row[0] if row else None
-    w = poster_frame_search.winfo_width() - 20
-    h = poster_frame_search.winfo_height() - 20
-    load_poster(url, poster_label_search, is_search=True, max_size=(w,h))
+
+    # FIX 2 — Load the poster directly from search results, NOT the database
+    movie = search_results_cache.get(imdb_id)
+    url = movie["Poster"] if movie and movie["Poster"] != "N/A" else None
+
+    # FIX 3 — Ensure minimum size to avoid 0×0 thumbnails
+    w = max(200, poster_frame_search.winfo_width() - 20)
+    h = max(300, poster_frame_search.winfo_height() - 20)
+
+    load_poster(url, poster_label_search, is_search=True, max_size=(w, h))
 
 tree_search.bind("<<TreeviewSelect>>", on_search_select)
 
@@ -190,11 +199,8 @@ def save_selected_movie():
     if not selected:
         messagebox.showwarning("No selection", "Please select a movie.")
         return
-    values = tree_search.item(selected[0], "values")
-    imdb_id = values[0]
-    # Get full data from OMDb
-    data = search_movies(values[1])
-    movie = next((m for m in data if m["imdbID"] == imdb_id), None)
+    imdb_id = tree_search.item(selected[0], "values")[0]
+    movie = search_results_cache.get(imdb_id)
     if movie:
         save_movie_to_db(movie)
         messagebox.showinfo("Saved", f"Saved: {movie['Title']}")
@@ -203,6 +209,7 @@ def save_selected_movie():
 ttk.Button(tab_search, text="Save Selected Movie to Database", command=save_selected_movie).pack(pady=10)
 
 # ------------------ SAVED TAB ------------------
+
 saved_frame = tk.Frame(tab_saved)
 saved_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
@@ -216,7 +223,6 @@ scrollbar_saved = ttk.Scrollbar(saved_frame, orient="vertical", command=tree_sav
 tree_saved.configure(yscroll=scrollbar_saved.set)
 scrollbar_saved.pack(side="left", fill="y")
 
-# Poster preview frame
 poster_frame_saved = tk.LabelFrame(saved_frame, text="Poster Preview", width=400)
 poster_frame_saved.pack(side="right", fill="both", expand=True, padx=10)
 poster_label_saved = tk.Label(poster_frame_saved, text="No Image")
@@ -228,15 +234,19 @@ def on_saved_select(event):
         poster_label_saved.config(image="", text="No Image")
         return
     imdb_id = tree_saved.item(selected[0], "values")[0]
+
     conn = sqlite3.connect("movies.db")
     cursor = conn.cursor()
     cursor.execute("SELECT poster_url FROM movies WHERE imdb_id=?", (imdb_id,))
     row = cursor.fetchone()
     conn.close()
+
     url = row[0] if row else None
-    w = poster_frame_saved.winfo_width() - 20
-    h = poster_frame_saved.winfo_height() - 20
-    load_poster(url, poster_label_saved, is_search=False, max_size=(w,h))
+
+    w = max(200, poster_frame_saved.winfo_width() - 20)
+    h = max(300, poster_frame_saved.winfo_height() - 20)
+
+    load_poster(url, poster_label_saved, is_search=False, max_size=(w, h))
 
 tree_saved.bind("<<TreeviewSelect>>", on_saved_select)
 
