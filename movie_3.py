@@ -122,7 +122,7 @@ tab_control.pack(expand=True, fill="both")
 
 # ------------------ SEARCH TAB ------------------
 
-search_results_cache = {}  # FIX 1 — store search results with poster URLs
+search_results_cache = {}
 
 search_frame = ttk.Frame(tab_search)
 search_frame.pack(pady=10, padx=10, fill="x")
@@ -141,7 +141,7 @@ def perform_search():
 
     search_results_cache.clear()
     for m in results:
-        search_results_cache[m["imdbID"]] = m   # FIX: store poster URL
+        search_results_cache[m["imdbID"]] = m  
 
     for row in tree_search.get_children():
         tree_search.delete(row)
@@ -177,11 +177,9 @@ def on_search_select(event):
 
     imdb_id = tree_search.item(selected[0], "values")[0]
 
-    # FIX 2 — Load the poster directly from search results, NOT the database
     movie = search_results_cache.get(imdb_id)
     url = movie["Poster"] if movie and movie["Poster"] != "N/A" else None
 
-    # FIX 3 — Ensure minimum size to avoid 0×0 thumbnails
     w = max(200, poster_frame_search.winfo_width() - 20)
     h = max(300, poster_frame_search.winfo_height() - 20)
 
